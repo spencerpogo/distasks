@@ -118,6 +118,9 @@ if __name__ == "__main__":
     c.run()
 ```
 
+### Screenshots
+![Server dashboard](https://user-images.githubusercontent.com/34356756/77696391-86fa7980-6f6a-11ea-92af-18f9af1bd5bc.png)
+
 If you need help configuring, want to request a feature, or found a bug feel free to open an issue. Pull requests are welcome.
 
 Made by [Scoder12](https://scoder12.ml)
