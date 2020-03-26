@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width">
+        <title>Distasks server Dashboard</title>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+        <style>
+            * {
+                font-family: sans-serif;
+            }
+            h1 {
+                margin: 2px;
+                display: inline-block;
+            }
+            button {
+                border: none;
+                cursor: pointer;
+            }
+            #refresh {
+                background: none;
+            }
+            #showdisconn-cont {
+                display: table;
+                border: 2px solid black;
+                border-radius: 2px;
+                padding: 3px;
+                margin: 5px;
+            }
+            #showdisconn-cont > div {
+                display: table-cell;
+                vertical-align: middle;
+                padding-left: 5px;
+            }
+            #stats {
+                display: block;
+            }
+            #status-container {
+                display: flex;
+                flex-wrap: wrap;
+            }
+            .client {
+                border: 1px solid;
+                border-radius: 5px;
+                margin: 5px;
+                padding: 15px;
+            }
+            .border-green {
+                border-color: green;
+            }
+            .border-red {
+                border-color: red;
+            }
+            .disconnected {
+                color: red;
+            }
+
+            /* The switch - the box around the slider */
+            .switch {
+                position: relative;
+                display: inline-block;
+                width: 40px;
+                height: 24px;
+            }
+
+            /* Hide default HTML checkbox */
+            .switch input {
+                opacity: 0;
+                width: 0;
+                height: 0;
+            }
+
+            /* The slider */
+            .slider {
+                position: absolute;
+                cursor: pointer;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-color: #ccc;
+                -webkit-transition: .4s;
+                transition: .4s;
+            }
+
+            .slider:before {
+                position: absolute;
+                content: "";
+                height: 16px;
+                width: 16px;
+                left: 4px;
+                bottom: 4px;
+                background-color: white;
+                -webkit-transition: .4s;
+                transition: .4s;
+            }
+
+            input:checked + .slider {
+                background-color: #2196F3;
+            }
+
+            input:focus + .slider {
+                box-shadow: 0 0 1px #2196F3;
+            }
+
+            input:checked + .slider:before {
+                -webkit-transform: translateX(16px);
+                -ms-transform: translateX(16px);
+                transform: translateX(16px);
+            }
+
+            /* Rounded sliders */
+            .slider.round {
+                border-radius: 34px;
+            }
+
+            .slider.round:before {
+                border-radius: 50%;
+            }
+        </style>
+    </head>
+    <body>
+        <button id="refresh">
+            <i class="material-icons">refresh</i>
+        </button>
+        <h1>Distasks Server Dashboard</h1>
+        <div id="showdisconn-cont">
+            <label class="switch">
+                <input type="checkbox" id="showdisconn">
+                <span class="slider round"></span>
+            </label>
+            <div>Show disconnected clients</div>
+        </div>
+        <div id="stats"></div>
+        <div id="status-container"></div>
+<script>
+let $refresh = $("#refresh"),
+    $stats = $("#stats"),
+    $statuscont = $("#status-container"),
+    $showdisconn = $("#showdisconn"),
+    clients;
+
+/* Paste in console for average completion per sec. 
+Usage: avg(n) where n is number of seconds to test for    
+
+avg=(s=2)=>{r=updateData;comp=()=>parseInt($stats.text().split("submitted this run: ").slice(-1)[0]);r().then(()=>{old=comp();setTimeout(()=>{r().then(()=>{console.log((comp()-old)/s+" results/sec")})},s*1000)})}
+*/
+
+function showFullBtn(txt, desc) {
+    if (!txt) {
+        return;
+    }
+    let btn = $(`<button>show ${desc} (${txt.length} chars)</button>`);
+    btn.click(function() {
+        btn.replaceWith(txt);
+    });
+    return btn;
+}
+
+function getConnectedClients() {
+    return clients.filter(function(c) {
+        return c.connected;
+    });
+}
+
+function filterClients() {
+    if (!$showdisconn.prop("checked")) {
+        return getConnectedClients();
+    }
+    return clients;
+}
+
+function renderClients(cl) {
+    const disconn = `
+    <span class="disconnected">
+        <i class="material-icons">signal_wifi_off</i>
+        Disconnected
+    </span>
+    <br>`;
+
+    $statuscont.empty()
+    cl.forEach(function(c) {
+        let curr = c.current||{};
+        $cdiv = $(
+            `<div class="client ${c.connected?"border-green":"border-red"}">
+                ${c.connected?"":disconn}
+                Name: <i>
+                    ${$("<i>").text(c.name||"??").html()}
+                    </i>
+                <br>
+                Completed: ${c.completed||0}
+                <br>
+                Assigned task #${curr.num||"?"}
+                <br>
+            </div>`
+        );
+        if (!c.connected) {
+            $cdiv.append()
+        }
+        $cdiv.append(showFullBtn(
+            "<code>"+JSON.stringify(curr.data)+"</code>", 
+            "task params"));
+        $statuscont.append($cdiv);
+    });
+}
+
+function updateData() {
+    return new Promise(function (res, rej) {
+        $.getJSON("/api/status")
+            .done(function(data) {
+                clients = [];
+                console.log(data);
+                if (data.error) {
+                    console.error("API reported error:", data.error);
+                    $statuscont.html(
+                        "API error: " + JSON.dumps(data.error)
+                    );
+                    return;
+                }
+                if (!data.clients) {
+                    console.error("No clients key in data");
+                    $statuscont.html("Invalid data received (check console for details)");
+                    return;
+                }
+
+                clients = data.clients;
+                totalComp = clients.reduce(
+                    function(a, b) {
+                        return a+(b.completed||0)
+                    },
+                    0
+                )
+                let prog = data.progress || 0;
+                
+                $stats.html(
+                    "<div><b>Number of clients connected: " + getConnectedClients().length +
+                    "</b></div>" +
+                    "<div><b>Number of clients seen: " + data.clients.length + 
+                    "</b></div>" +
+                    "<div><b>Results submitted this run: " + totalComp + "</b></div>" +
+                    "<div><b>Current progress: " + prog + "</b></div>"
+                );
+                renderClients(filterClients());
+                res();
+            })
+            .fail(function(err) {
+                clients = [];
+                console.error("Request error:", err);
+                $statuscont.html("Request error (check console for details)");
+                rej();
+            });
+    });
+}
+
+$showdisconn.on("change", function() {
+    if (clients !== undefined) {
+        renderClients(filterClients());
+    }
+})
+
+$refresh.click(updateData);
+
+$(document).ready(updateData);
+</script>
+    </body>
+</html>
