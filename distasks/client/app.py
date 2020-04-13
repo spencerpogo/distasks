@@ -73,7 +73,7 @@ class DistasksClient:
         if os.path.exists(os.path.join(".", "task_assets", "task.sh")):
             # make an asynchronous subprocess
             proc = await asyncio.create_subprocess_shell(
-                shlex.join(os.path.join(".", "task.sh"), data),
+                shlex.join([os.path.join(".", "task.sh"), data]),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE)
             stdout, stderr = await proc.communicate()
